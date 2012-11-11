@@ -6,36 +6,45 @@
             [clojure.tools.nrepl.middleware.session :as m.session]
             [clojure.tools.nrepl.misc :as misc]))
 
-; speak with a thousand voices
+;; speak with a thousand voices
 
-; :username -> {:username :session :transport}
+;; TODO
+;; only broadcast code sessions - maybe check session in join
+;; figure out whats going on with output
+;; namespace the keys we use?
+;; nicer printing
+;; make sure printing works even if user moves cursor
+;;   probably have to figure out what all that marker stuff in nrepl does
+
+;; :username -> {:username :session :transport}
 (def users (atom {}))
 
 (defn get-user [username]
   (get @users username))
 
 (defn lookup-user [key value]
-  (some #(= value (key %)) (vals @users)))
+  (some (fn [user]
+          (when (= value (key user))
+            user))
+        (vals @users)))
 
 (defn add-user! [user]
   (swap! users assoc (:username user) user))
 
-(defn broadcast [from-username text]
-  (prn 'broadcasting from-username text)
-  (doseq [[username {:keys [transport session]}] @users]
-    (when (not= from-username username)
-      (t/send transport {:session session
-                         :broadcast {:from from-username
-                                     :text text}}))))
+(defn broadcast [username msg]
+  (doseq [{:keys [transport session]} (vals @users)]
+    ;; TODO seems to be a bug in nrepl with decoding :session nil
+    (t/send transport {:username username
+                       :broadcast msg})))
 
 (defn join-middleware [handler]
   (fn [{:keys [op transport session username] :as msg}]
-    (prn 'msg msg) ;; TODO remove
+    (prn 'msg msg) ;; TODO log instead
     (if (not= "join" op)
       (handler msg)
       (do ;; TODO set ns to user.[username]
         (add-user! {:username username :session session :transport transport})
-        (broadcast username (str username " joined!"))
+        (broadcast username {:joined session})
         (t/send transport (misc/response-for msg :status :done))))))
 
 (m/set-descriptor! #'join-middleware
@@ -55,11 +64,7 @@
   (send [this msg]
     (t/send transport msg)
     (when (contains? msg :value) ; is this the result of the eval?
-      (broadcast username
-                 (str username " " (:ns msg) "> "
-                      code "\n"
-                      (:out msg)
-                      (:value msg))))))
+      (broadcast username (assoc msg :code code)))))
 
 (defn broadcast-middleware [handler]
   (fn [{:keys [op transport session code] :as msg}]
@@ -67,7 +72,7 @@
       (let [username (if-let [user (lookup-user :session session)]
                        (:username user)
                        "unknown user")]
-        (handler (assoc msg :transport (->Eval code (str username " <" session ">") transport))))
+        (handler (assoc msg :transport (->Eval code username transport))))
       (handler msg))))
 
 (m/set-descriptor! #'broadcast-middleware
