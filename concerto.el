@@ -2,21 +2,26 @@
 
 (defvar concerto-broadcast-buffer-name "*concerto*")
 
-(defun concerto-init-broadcast-buffer (connection buffer)
-  (with-current-buffer buffer
-    ;; TODO init?
-    ))
+(defvar concerto-broadcast-mark)
 
-(defun concerto-broadcast-buffer (&optional noprompt)
+(defun concerto-init-broadcast-buffer (buffer)
+  (with-current-buffer buffer
+    (set 'concerto-broadcast-mark (make-marker))
+    (set-marker concerto-broadcast-mark (point))))
+
+(defun concerto-broadcast-buffer ()
   "Return the broadcast buffer, create if necessary."
   (let ((buffer (get-buffer concerto-broadcast-buffer-name)))
     (or (if (buffer-live-p buffer) buffer)
         (let ((connection (get-process nrepl-connection-buffer)))
-          (concerto-init-broadcast-buffer connection (get-buffer-create concerto-broadcast-buffer-name))))))
+          (concerto-init-broadcast-buffer (get-buffer-create concerto-broadcast-buffer-name))))))
 
 (defun concerto-insert (buffer face text)
   (with-current-buffer buffer
-    (nrepl-propertize-region (list 'face face) (insert text))))
+    (save-excursion
+      (goto-char concerto-broadcast-mark)
+      (nrepl-propertize-region (list 'face face) (insert text))
+      (set-marker concerto-broadcast-mark (point)))))
 
 (defun concerto-broadcast-handler ()
   (lexical-let ((buffer (concerto-broadcast-buffer)))
@@ -70,4 +75,4 @@
 (defun concerto (username)
   (interactive (list (read-string "Username: " concerto-default-username nil concerto-default-username)))
   (concerto-join username)
-  (pop-to-buffer (concerto-broadcastbuffer)))
+  (pop-to-buffer (concerto-broadcast-buffer)))
