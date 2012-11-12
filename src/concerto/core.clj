@@ -9,12 +9,9 @@
 ;; speak with a thousand voices
 
 ;; TODO
-;; only broadcast code sessions - maybe check session in join
-;; figure out whats going on with output
 ;; namespace the keys we use?
-;; nicer printing
-;; make sure printing works even if user moves cursor
-;;   probably have to figure out what all that marker stuff in nrepl does
+;; figure out whats going on with output printing
+;; highlight user name, print join message
 
 ;; :username -> {:username :session :transport}
 (def users (atom {}))
@@ -68,11 +65,10 @@
 
 (defn broadcast-middleware [handler]
   (fn [{:keys [op transport session code] :as msg}]
-    (if (= "eval" op)
-      (let [username (if-let [user (lookup-user :session session)]
-                       (:username user)
-                       "unknown user")]
-        (handler (assoc msg :transport (->Eval code username transport))))
+    (if (= op "eval")
+      (if-let [user (lookup-user :session session)]
+        (handler (assoc msg :transport (->Eval code (:username user) transport)))
+        (handler msg))
       (handler msg))))
 
 (m/set-descriptor! #'broadcast-middleware
