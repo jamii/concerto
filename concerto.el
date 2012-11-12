@@ -31,13 +31,13 @@
       (nrepl-dbind-response broadcast (code value ns out err status)
         (when code
           (concerto-insert buffer 'nrepl-prompt-face (format "%s> " ns))
-          (concerto-insert buffer 'nrepl-input-face (format "%s\n" code)))
-        (when value
-          (concerto-insert buffer 'nrepl-result-face (format "%s\n" value)))
+          (concerto-insert buffer 'nrepl-input-face (format "%s" code)))
         (when out
           (concerto-insert buffer 'nrepl-output-face (format "%s\n" out)))
         (when err
-          (concerto-insert buffer 'nrepl-error-face (format "%s\n" err)))))))
+          (concerto-insert buffer 'nrepl-error-face (format "%s\n" err)))
+        (when value
+          (concerto-insert buffer 'nrepl-result-face (format "%s\n" value)))))))
 
 (concerto-insert (concerto-broadcast-buffer) 'nrepl-result-face "1")
 
