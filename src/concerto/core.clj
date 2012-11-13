@@ -79,15 +79,18 @@
                     :expects #{}
                     :handles {}})
 
-(def default-handler (-> (s/default-handler)
-                         broadcast-middleware
-                         eval-middleware
-                         join-middleware))
+(def default-handler [& other-handlers]
+  (-> (s/default-handler other-handlers)
+      broadcast-middleware
+      eval-middleware
+      join-middleware))
 
-(defonce server
-  (s/start-server :port 8003 :handler default-handler))
+(defn server [& other-handlers]
+  (s/start-server :port 8003 :handler (apply default-handler other-handlers)))
 
 (comment
+  ;; for debugging :)
+
   ;; in server repl
   (use 'concerto.core)
 
