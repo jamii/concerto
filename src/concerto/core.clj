@@ -11,38 +11,35 @@
 ;; TODO
 ;; namespace the keys we use?
 ;; figure out whats going on with output printing
+;;   fix seems to re-introduced tooling output on same session :(
+;;   at some point we broke nrepl-error too :(
 ;; highlight user name, print join message
 
-;; :username -> {:username :session :transport}
+;; :session -> {:username :session :transport}
 (def users (atom {}))
 
-(defn get-user [username]
-  (get @users username))
-
-(defn lookup-user [key value]
-  (some (fn [user]
-          (when (= value (key user))
-            user))
-        (vals @users)))
+(defn session->user [session]
+  (get @users session))
 
 (defn add-user! [user]
-  (swap! users assoc (:username user) user))
+  (swap! users assoc (:session user) user))
 
-(defn broadcast [username msg]
-  (doseq [{:keys [transport session]} (vals @users)]
-    ;; TODO seems to be a bug in nrepl with decoding :session nil
-    (t/send transport {:username username
-                       :broadcast msg})))
+(defn broadcast [session msg]
+  (when-let [user (session->user session)]
+    (doseq [{:keys [transport session]} (vals @users)]
+      (t/send transport {:session session
+                         :username (:username user)
+                         :broadcast msg}))))
 
 (defn join-middleware [handler]
   (fn [{:keys [op transport session username] :as msg}]
     (prn 'msg msg) ;; TODO log instead
-    (if (not= "join" op)
-      (handler msg)
-      (do ;; TODO set ns to user.[username]
-        (add-user! {:username username :session session :transport transport})
-        (broadcast username {:joined session})
-        (t/send transport (misc/response-for msg :status :done))))))
+    (cond
+     (not= "join" op) (handler msg)
+     (nil? session) (t/send transport (misc/response-for msg :status [:err :no-session]))
+     :else (do (add-user! {:username username :session session :transport transport})
+               (broadcast session {:joined session})
+               (t/send transport (misc/response-for msg :status :done))))))
 
 (m/set-descriptor! #'join-middleware
                    {:requires #{#'m.session/session}
@@ -54,29 +51,38 @@
                                :optional {}
                                :returns {"status" "Done"}}}})
 
-(defrecord Eval [code username transport]
+(defn eval-middleware [handler]
+  (fn [{:keys [op session code ns] :as msg}]
+    (when (= "eval" op)
+      (broadcast session {:code code :ns ns}))
+    (handler msg)))
+
+(m/set-descriptor! #'eval-middleware
+                   {:requires #{}
+                    :expects #{"eval"}
+                    :handles {}})
+
+(defrecord Broadcast [transport]
   clojure.tools.nrepl.transport.Transport
   (recv [this timeout]
     (t/recv transport timeout))
   (send [this msg]
     (t/send transport msg)
-    (when (contains? msg :value) ; is this the result of the eval?
-      (broadcast username (assoc msg :code code)))))
+    (when-let [session (:session msg)]
+      (broadcast session msg))))
 
 (defn broadcast-middleware [handler]
-  (fn [{:keys [op transport session code] :as msg}]
-    (if (= op "eval")
-      (if-let [user (lookup-user :session session)]
-        (handler (assoc msg :transport (->Eval code (:username user) transport)))
-        (handler msg))
-      (handler msg))))
+  (fn [msg] (handler (update-in msg [:transport] ->Broadcast))))
 
 (m/set-descriptor! #'broadcast-middleware
-                   {:requires #{#'m.session/session}
-                    :expects #{"eval"}
+                   {:requires #{}
+                    :expects #{}
                     :handles {}})
 
-(def default-handler (s/default-handler broadcast-middleware join-middleware))
+(def default-handler (-> (s/default-handler)
+                         broadcast-middleware
+                         eval-middleware
+                         join-middleware))
 
 (defonce server
   (s/start-server :port 8003 :handler default-handler))
