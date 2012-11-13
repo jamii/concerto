@@ -27,7 +27,9 @@
   (lexical-let ((buffer (concerto-broadcast-buffer)))
     (lambda (username broadcast)
       (message "broadcast from %s: %s" username broadcast)
-      (nrepl-dbind-response broadcast (code value ns out err status)
+      (nrepl-dbind-response broadcast (code value ns out err status joined)
+        (when joined
+          (concerto-insert buffer 'nrepl-prompt-face (format "%s joined!\n" username)))
         (when (and ns code)
           (concerto-insert buffer 'nrepl-prompt-face (format "%s " username))
           (concerto-insert buffer 'nrepl-prompt-face (format "%s> " ns))
