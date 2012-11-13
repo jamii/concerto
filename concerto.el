@@ -26,7 +26,6 @@
 (defun concerto-broadcast-handler ()
   (lexical-let ((buffer (concerto-broadcast-buffer)))
     (lambda (username broadcast)
-      (message "broadcast from %s: %s" username broadcast)
       (nrepl-dbind-response broadcast (code value ns out err status joined)
         (when joined
           (concerto-insert buffer 'nrepl-prompt-face (format "%s joined!\n" username)))
@@ -45,7 +44,6 @@
 ;; hopefully we can eventually add an extension mechanism to nrepl.el
 (defun nrepl-default-handler (response)
   "Default handler which is invoked when no handler is found."
-  (message "recv: %s" response)
   (nrepl-dbind-response response (out value username broadcast)
     (cond
      (out

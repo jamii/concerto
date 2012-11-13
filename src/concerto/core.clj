@@ -11,9 +11,9 @@
 
 ;; TODO
 ;; namespace the keys we use?
-;; figure out whats going on with output printing
-;;   at some point we broke nrepl-error too :(
-;; highlight user name, print join message
+;; at some point we broke nrepl-error too :(
+;;   nrepl.el seems to have some bugs parsing nested dicts, possibly related
+;; highlight user name
 
 ;; :session -> {:username :session :transport}
 (def players (atom {}))
