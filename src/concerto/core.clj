@@ -1,4 +1,5 @@
 (ns concerto.core
+  (:use [slingshot.slingshot :only [try+ throw+]])
   (:require [clojure.tools.nrepl :as c]
             [clojure.tools.nrepl.server :as s]
             [clojure.tools.nrepl.transport :as t]
@@ -11,25 +12,31 @@
 ;; TODO
 ;; namespace the keys we use?
 ;; figure out whats going on with output printing
-;;   fix seems to re-introduced tooling output on same session :(
 ;;   at some point we broke nrepl-error too :(
 ;; highlight user name, print join message
 
 ;; :session -> {:username :session :transport}
-(def users (atom {}))
+(def players (atom {}))
 
-(defn session->user [session]
-  (get @users session))
+(defn session->player [session]
+  (get @players session))
 
-(defn add-user! [user]
-  (swap! users assoc (:session user) user))
+(defn add-player! [player]
+  (swap! players assoc (:session player) player))
+
+(defn del-player! [player]
+  (swap! players dissoc (:session player)))
 
 (defn broadcast [session msg]
-  (when-let [user (session->user session)]
-    (doseq [{:keys [transport session]} (vals @users)]
-      (t/send transport {:session session
-                         :username (:username user)
-                         :broadcast msg}))))
+  (when-let [player (session->player session)]
+    (doseq [{:keys [transport session]} (vals @players)]
+      (try+
+       (t/send transport {:session session
+                          :username (:username player)
+                          :broadcast msg})
+       (catch java.net.SocketException exc
+         (prn 'drop player exc) ;; TODO log instead
+         (del-player! player))))))
 
 (defn join-middleware [handler]
   (fn [{:keys [op transport session username] :as msg}]
@@ -37,7 +44,7 @@
     (cond
      (not= "join" op) (handler msg)
      (nil? session) (t/send transport (misc/response-for msg :status [:err :no-session]))
-     :else (do (add-user! {:username username :session session :transport transport})
+     :else (do (add-player! {:username username :session session :transport transport})
                (broadcast session {:joined session})
                (t/send transport (misc/response-for msg :status :done))))))
 
@@ -79,8 +86,8 @@
                     :expects #{}
                     :handles {}})
 
-(def default-handler [& other-handlers]
-  (-> (s/default-handler other-handlers)
+(defn default-handler [& other-handlers]
+  (-> (apply s/default-handler other-handlers)
       broadcast-middleware
       eval-middleware
       join-middleware))
