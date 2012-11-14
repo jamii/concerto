@@ -15,9 +15,9 @@ On the server side:
 ```clojure
 jamie@alien:~/concerto$ lein repl
 ...
-user=> (require 'concerto.core)
+user=> (require 'concerto)
 nil
-user=> (def server (concert.core/server))
+user=> (def server (concerto/server))
 #'user/server
 ```
 

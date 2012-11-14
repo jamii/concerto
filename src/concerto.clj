@@ -1,4 +1,4 @@
-(ns concerto.core
+(ns concerto
   (:use [slingshot.slingshot :only [try+ throw+]])
   (:require [clojure.tools.nrepl :as c]
             [clojure.tools.nrepl.server :as s]
